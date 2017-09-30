@@ -1,16 +1,18 @@
-const EventEmitter = require('events');
+const EventEmitter = require('events').EventEmitter;
 const utils = require('./utils');
 const proto = {};
 const env = process.env.NODE_EVN || 'development';
-const LISTENER = ['scan', 'notify', 'hub', 'le'];
-const PROPERTY = ['name', 'uuid'];
+const METHOD = ['scan', 'notify', 'hub', 'le'];
+const PROPERTY = ['name', 'uuid', 'rssi'];
+const Sdk = require('./bi/api');
+const UNIQUE = '<_all_>';
 const DEFAULT = {
-  address: 'all',
-  hubMac: 'all',
-  listener: 'all',
-  property: 'all',
-  route: 'all',
-  handle: null
+  address: UNIQUE,
+  hubMac: UNIQUE,
+  method: METHOD,
+  property: UNIQUE,
+  route: () => true,
+  handle: (req, res, next) => next()
 };
 
 var defer = typeof setImmediate === 'function' ? setImmediate : function (fn) {
@@ -20,13 +22,17 @@ var defer = typeof setImmediate === 'function' ? setImmediate : function (fn) {
 module.exports = lexpress;
 
 function lexpress() {
-  function app(req, next) {
-    app.handle(req, next);
+  function app(req, res, next) {
+    app.handle(req, res, next);
   }
   utils.merge(app, proto);
   utils.merge(app, EventEmitter.prototype);
-  app.route = '/';
-  app.stack = [];
+  app.stack = {
+    scan: [],
+    notify: [],
+    le: [],
+    hub: []
+  };
   return app;
 }
 
@@ -35,14 +41,14 @@ function lexpress() {
  * 
  * @param {String|Array} address 
  * @param {String|Array} router 
- * @param {String|Array} listener 
+ * @param {String|Array} method 
  * @param {String|Array} property 
  * @param {String|Function} route 
  * @param {Function} fn 
  * @return {app} for chaining 
  * {
  * address,
- * listener,
+ * method,
  * property,
  * route,
  * fn
@@ -50,61 +56,160 @@ function lexpress() {
  * 
  */
 
-proto.use = function use(option, fn) {
-  let _option = null;
+proto.use = function use(option, handles) {
+  const len = arguments.length;
+  const optionType = utils.typeof(option);
+  const handlesType = utils.typeof(handles);
 
-  if (typeof option === 'function') {
-    _option = Object.assign({}, DEFAULT, {
-      handle: option
-    });
-  } else {
-    option.handle = fn;
-    _option = Object.assign({}, DEFAULT, option);
+  if (len === 1) {
+    if (optionType === 'array') {
+      handles = option;
+    } else if (optionType === 'function') {
+      handles = [option];
+    }
+    option = DEFAULT;
+  } else if (len === 2) {
+    if (optionType === 'function') {
+      option = Object.assign({}, DEFAULT, {
+        handle: option
+      });
+    } else if (optionType === 'object') {
+      option = Object.assign({}, DEFAULT, option);
+    }
+    if (handlesType === 'function') {
+      handles = [handles];
+    }
   }
-
-  this.stack.push(_option);
+  if (utils.typeof(option.method) === 'array') {
+    option.method.forEach(function (ele) {
+      if (proto[ele]) {
+        this[ele](option, handles);
+      }
+    }, this);
+  } else if (proto[option.method]) {
+    this.stack[option.method].push(option, handles);
+  }
   return this;
 };
 
 // ['scan', 'notify', 'hub', 'le'];
-LISTENER.forEach((ele, index, arr) => {
-  proto[ele].use = function (option, fn) {
-    let _option = Object.assign({}, DEFAULT, {
-      listener: ele
-    });
+METHOD.forEach(function (ele, index, arr) {
+  proto[ele] = function (option, handles) {
+    const len = arguments.length;
+    const optionType = utils.typeof(option);
+    const handlesType = utils.typeof(handles);
 
-    if (typeof option === 'function') {
-      fn = option;
-    } else {
-      _option = Object.assign({}, _option, {
-        listener: ele
-      });
+    if (len === 1) {
+      if (optionType === 'function') {
+        handles = [option];
+        option = Object.assign({}, DEFAULT, {
+          method: ele
+        });
+      } else if (optionType === 'array') {
+        handles = option;
+        option = Object.assign({}, DEFAULT, {
+          method: ele
+        });
+      }
+    } else if (len === 2) {
+      if (optionType === 'function') {
+        option = Object.assign({}, DEFAULT, {
+          route: option,
+          method: ele
+        });
+      } else if (optionType === 'object') {
+        option = Object.assign({}, DEFAULT, option, {
+          method: ele
+        });
+      }
+      if (handlesType === 'function') {
+        handles = [handles];
+      }
     }
-    proto.use(_option, fn);
+    handles.forEach(function (handle) {
+      this.stack[option.method].push(Object.assign(option, {
+        handle: handle
+      }));
+    }, this);
+    return this;
   };
 });
 
-proto.notify.use = proto.use();
-proto.hub.use = proto.use();
-proto.le.use = proto.use();
-
 proto.handle = function (req, res, out) {
   let index = 0;
-  const stack = this.stack;
+  const stack = this.stack[req.method];
   const done = out;
 
   function next(err) {
     const layer = stack[index++];
 
     if (!layer) {
-      defer(done, err);
+      // defer(done, err);
       return;
     }
-
-    call(layer.handle, layer.route, err, req, next);
+    if (compare.call(this, req, layer, next.bind(this, err))) {
+      call(layer.handle, layer.route, err, req, res, next);
+    }
   }
-  next();
+  next.call(this);
 };
+
+proto.listen = function (cfg, callback) {
+  let sdk = new Sdk(cfg);
+
+  sdk.on('data', this);
+  sdk.init.call(sdk).then(function () {}, function (e) {
+    console.error('----', e);
+    sdk.removeAllListeners();
+  });
+};
+
+function compare(req, rule, fn) {
+  const address = req.address;
+  const hubMac = req.hubMac;
+  const property = rule.property;
+
+  function routeCompare(str, rule, req) {
+    const ruleType = utils.typeof(rule);
+
+    if (str === UNIQUE && req.data) {
+      if (ruleType === 'function') {
+        return rule(req);
+      } else if (rule === UNIQUE) {
+        return true;
+      }
+    }
+    if (ruleType === 'string') {
+      return str === rule;
+    }
+    if (ruleType === 'regexp') {
+      return rule.exec(str);
+    }
+    if (ruleType === 'function') {
+      return rule(str);
+    }
+    if (ruleType === 'array') {
+      return rule.includes(str);
+    }
+    if (ruleType === 'number') {
+      return rule < str;
+    }
+    if (ruleType === undefined) {
+      return true;
+    }
+  }
+
+  if (!routeCompare(address, rule.address, req)) {
+    return fn();
+  }
+  if (!routeCompare(hubMac, rule.hubMac, req)) {
+    return fn();
+  }
+  if (req.data && !routeCompare(property === UNIQUE ? UNIQUE : req.data[property], rule.route, req)) {
+    return fn();
+  }
+  return true;
+}
 
 function call(handle, route, err, req, res, next) {
   const arity = handle.length;
@@ -124,8 +229,9 @@ function call(handle, route, err, req, res, next) {
   } catch (e) {
     // replace the error
     error = e;
+    console.error(e);
   }
 
   // continue
-  next(error);
+  // next(error);
 }

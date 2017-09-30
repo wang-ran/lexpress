@@ -5,7 +5,6 @@ var original = require('original'),
   https = require('https'),
   http = require('http'),
   util = require('util');
-console.error('new eventsource ====================================================')
 
 function isPlainObject(obj) {
   return Object.getPrototypeOf(obj) === Object.prototype;

@@ -87,7 +87,7 @@ module.exports = function (address, developer, secret) {
       console.error(`watch ${address} hubStatus error`);
     };
 
-    return watcher;
+    return [watcher];
   }
 
   /**
@@ -278,7 +278,7 @@ module.exports = function (address, developer, secret) {
     scan(option = {
       active: 1
     }) {
-      if (!this.scanEs) {
+      if (this.scanEs) {
         return this.scanEs;
       }
       const self = this;
@@ -297,19 +297,21 @@ module.exports = function (address, developer, secret) {
         if (e.data.match('offline')) {
           this.emit('offline');
         }
-        const datas = safeParse(e.data);
-        const len = datas.length;
+        // const datas = safeParse(e.data);
+        // const len = datas.length;
 
-        for (let i = 0; i < len; i++) {
-          datas[i].name = String(datas[i].name);
-          if (datas[i].adData) {
-            datas[i].adData = datas[i].adData.toUpperCase();
-          }
-          if (datas[i].scanData) {
-            datas[i].scanData = datas[i].scanData.toUpperCase();
-          }
-          self.emit('scan', datas[i]);
-        }
+        // for (let i = 0; i < len; i++) {
+        //   datas[i].name = String(datas[i].name);
+        //   if (datas[i].adData) {
+        //     datas[i].adData = datas[i].adData.toUpperCase();
+        //   }
+        //   if (datas[i].scanData) {
+        //     datas[i].scanData = datas[i].scanData.toUpperCase();
+        //   }
+        self.emit('scan', {
+          origin: e.data
+        });
+        // }
       };
       es.onerror = function (e) {
         self.emit('error', e);
