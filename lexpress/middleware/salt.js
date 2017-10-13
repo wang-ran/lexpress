@@ -1,4 +1,4 @@
-module.exports = function (option) {
+module.exports = function (salts) {
   const nodes = new Map();
   const MAXLEN = 8000;
   const names = [];
@@ -16,11 +16,11 @@ module.exports = function (option) {
     } else if (isRecord) {
       req.data.name = nodes.get(mac);
     }
-    next();
+    next.call(this);
   }
 
   function addPosition(req, res, next) {
-    next();
+    next.call(this);
   }
 
   const handles = {
@@ -29,7 +29,7 @@ module.exports = function (option) {
   };
   const handleUsed = [];
 
-  option.forEach(function (element) {
+  salts.forEach(function (element) {
     if (handles[element]) {
       handleUsed.push(handles[element]);
     }

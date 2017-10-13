@@ -30,7 +30,8 @@ module.exports = function (req, res, next) {
         array[i].scanData = array[i].scanData.toUpperCase();
       }
       req.data = format(array[i]);
-      next();
+      req.data.mac = req.mac;
+      next.call(this);
     }
   }
 
@@ -46,5 +47,11 @@ module.exports = function (req, res, next) {
   }
 
   req.data = safeParse(req.origin);
-  toUpperCase(req, adDataFormate, next);
+  if (req.method === 'scan') {
+    toUpperCase.call(this, req, adDataFormate, next);
+  } else if (req.method === 'notify') {
+    req.data.forEach(function (element) {
+      next.call(this, element);
+    }, this);
+  }
 };

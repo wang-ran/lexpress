@@ -32,9 +32,9 @@ class Api extends EventEmitter {
       } else {
         console.log('watch hub status in way 2');
         timer && clearInterval(timer);
+        this.watchStatus2();
         timer = setInterval(() => {
-          this.watchStatus2();
-        }, Math.max(cfg.interval, 10000));
+        }, Math.max(cfg.interval, 200));
       }
       cb && cb();
     }.bind(this));
@@ -78,7 +78,9 @@ class Api extends EventEmitter {
           this.hubOffline(v, this.hubs[v].info);
         }
       }
-    }.bind(this));
+    }.bind(this)).catch(function (e) {
+      console.error(this.name, 'get getOnlineHubs error');
+    });
   };
   hubOnline(mac, info) {
     const self = this;
@@ -116,12 +118,12 @@ class Api extends EventEmitter {
       const d = {
         method: 'notify',
         address: this.name || this.address,
-        data: notifyData,
+        origin: notifyData,
         mac
       };
 
-      this('data', d);
-      this('notify', d);
+      this.emit('data', d);
+      this.emit('notify', d);
     });
 
     this.hubs[mac].on('error', (err) => {

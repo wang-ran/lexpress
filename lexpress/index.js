@@ -10,13 +10,8 @@ const DEFAULT = {
   address: UNIQUE,
   hubMac: UNIQUE,
   method: METHOD,
-  property: UNIQUE,
-  route: () => true,
+  name: UNIQUE,
   handle: (req, res, next) => next()
-};
-
-var defer = typeof setImmediate === 'function' ? setImmediate : function (fn) {
-  process.nextTick(fn.bind.apply(fn, arguments));
 };
 
 module.exports = lexpress;
@@ -142,13 +137,12 @@ proto.handle = function (req, res, out) {
 
   function next(err) {
     const layer = stack[index++];
-
     if (!layer) {
       // defer(done, err);
       return;
     }
     if (compare.call(this, req, layer, next.bind(this, err))) {
-      call(layer.handle, layer.route, err, req, res, next);
+      call.call(this, layer.handle, layer.route, err, req, res, next);
     }
   }
   next.call(this);
@@ -164,49 +158,51 @@ proto.listen = function (cfg, callback) {
   });
 };
 
-function compare(req, rule, fn) {
+function compare(req, layer, fn) {
   const address = req.address;
   const hubMac = req.hubMac;
-  const property = rule.property;
+  const property = layer.property;
 
-  function routeCompare(str, rule, req) {
-    const ruleType = utils.typeof(rule);
+  function routeCompare(str, layerRule) {
+    const ruleType = utils.typeof(layerRule);
 
-    if (str === UNIQUE && req.data) {
-      if (ruleType === 'function') {
-        return rule(req);
-      } else if (rule === UNIQUE) {
-        return true;
-      }
+    if (layerRule === UNIQUE) {
+      return true;
     }
     if (ruleType === 'string') {
-      return str === rule;
+      return str === layerRule;
     }
     if (ruleType === 'regexp') {
-      return rule.exec(str);
+      return layerRule.exec(str);
     }
     if (ruleType === 'function') {
-      return rule(str);
+      return layerRule(str);
     }
     if (ruleType === 'array') {
-      return rule.includes(str);
+      return layerRule.includes(str);
     }
     if (ruleType === 'number') {
-      return rule < str;
+      return layerRule < str;
     }
-    if (ruleType === undefined) {
+    if (ruleType === 'undefined') {
       return true;
     }
   }
-
-  if (!routeCompare(address, rule.address, req)) {
-    return fn();
+  if (!req.data) {
+    return true;
   }
-  if (!routeCompare(hubMac, rule.hubMac, req)) {
-    return fn();
-  }
-  if (req.data && !routeCompare(property === UNIQUE ? UNIQUE : req.data[property], rule.route, req)) {
-    return fn();
+  for (let key in layer) {
+    if (layer.hasOwnProperty(key)) {
+      if (key === 'route') {
+        if (!routeCompare(req, layer[key], req)) {
+          return fn();
+        }
+      } else if (key !== 'handle' && key !== 'method') {
+        if (!routeCompare(req.data[key], layer[key], req)) {
+          return fn();
+        }
+      }
+    }
   }
   return true;
 }
@@ -219,11 +215,11 @@ function call(handle, route, err, req, res, next) {
   try {
     if (hasError && arity === 4) {
       // error-handling middleware
-      handle(err, req, res, next);
+      handle.call(this, err, req, res, next);
       return;
     } else if (!hasError && arity < 4) {
       // request-handling middleware
-      handle(req, res, next);
+      handle.call(this, req, res, next);
       return;
     }
   } catch (e) {

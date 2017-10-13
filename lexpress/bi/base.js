@@ -9,7 +9,6 @@ module.exports = function (address, developer, secret) {
     Authorization: 'Basic ' + new Buffer(developer + ':' + secret, 'ascii').toString('base64')
   };
 
-  const connecting = {};
   const req = request.defaults({
     baseUrl: address,
     json: true,
@@ -229,9 +228,7 @@ module.exports = function (address, developer, secret) {
     constructor(hubMac) {
       super();
       this.model = getModel(hubMac);
-      // this.model = 'S1000'
       this.mac = hubMac;
-      // this.scanInstance = new Map();
       this.notifyEs = null;
       this.scanEs = null;
 
@@ -291,27 +288,13 @@ module.exports = function (address, developer, secret) {
       });
 
       es.onmessage = function (e) {
-        if (e.data.match('keep-alive')) {
-          return;
-        };
-        if (e.data.match('offline')) {
-          this.emit('offline');
-        }
-        // const datas = safeParse(e.data);
-        // const len = datas.length;
-
-        // for (let i = 0; i < len; i++) {
-        //   datas[i].name = String(datas[i].name);
-        //   if (datas[i].adData) {
-        //     datas[i].adData = datas[i].adData.toUpperCase();
-        //   }
-        //   if (datas[i].scanData) {
-        //     datas[i].scanData = datas[i].scanData.toUpperCase();
-        //   }
+        // if (e.data.match('offline')) {
+        //   this.emit('offline');
+        //   return;
+        // }
         self.emit('scan', {
           origin: e.data
         });
-        // }
       };
       es.onerror = function (e) {
         self.emit('error', e);
@@ -331,7 +314,7 @@ module.exports = function (address, developer, secret) {
     connect(deviceMac, type, body) {
       const self = this;
 
-      if (connecting[this.mac]) {
+      if (nodeConnecting[this.mac]) {
         return Promise.reject('busy');
       };
       console.info('connect', deviceMac, type, body);
@@ -339,10 +322,10 @@ module.exports = function (address, developer, secret) {
         body = type;
         type = 'public';
       }
-      connecting[this.mac] = true;
+      nodeConnecting[this.mac] = true;
       return new Promise((resolve, reject) => {
         const t = setTimeout(function () {
-          connecting[self.mac] = false;
+          nodeConnecting[self.mac] = false;
           return reject('timeout');
         }, 10000);
 
@@ -356,7 +339,7 @@ module.exports = function (address, developer, secret) {
           }, body)
         }, function (err, res, body) {
           t && clearTimeout(t);
-          connecting[self.mac] = false;
+          nodeConnecting[self.mac] = false;
           console.log(self.mac, 'connect', deviceMac, body, err);
           typeof body === 'object' ? body = JSON.stringify(body) : body;
           if (err) {
@@ -488,11 +471,11 @@ module.exports = function (address, developer, secret) {
         if (e.data.match('offline')) {
           self.emit('offline');
         }
-        let datas = safeParse(e.data);
+        // let datas = safeParse(e.data);
 
-        datas.forEach(d => {
-          self.emit('notify', d.toUpperCase());
-        });
+        // datas.forEach(d => {
+        self.emit('notify', e.data);
+        // });
       };
       es.onerror = function (e) {
         self.emit('error', e);
