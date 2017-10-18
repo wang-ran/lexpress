@@ -8,9 +8,8 @@ const Sdk = require('./bi/api');
 const UNIQUE = '<_all_>';
 const DEFAULT = {
   address: UNIQUE,
-  hubMac: UNIQUE,
+  mac: UNIQUE,
   method: METHOD,
-  name: UNIQUE,
   handle: (req, res, next) => next()
 };
 
@@ -31,26 +30,6 @@ function lexpress() {
   return app;
 }
 
-/**
- * 
- * 
- * @param {String|Array} address 
- * @param {String|Array} router 
- * @param {String|Array} method 
- * @param {String|Array} property 
- * @param {String|Function} route 
- * @param {Function} fn 
- * @return {app} for chaining 
- * {
- * address,
- * method,
- * property,
- * route,
- * fn
- * }
- * 
- */
-
 proto.use = function use(option, handles) {
   const len = arguments.length;
   const optionType = utils.typeof(option);
@@ -66,7 +45,7 @@ proto.use = function use(option, handles) {
   } else if (len === 2) {
     if (optionType === 'function') {
       option = Object.assign({}, DEFAULT, {
-        handle: option
+        route: option
       });
     } else if (optionType === 'object') {
       option = Object.assign({}, DEFAULT, option);
@@ -133,10 +112,10 @@ METHOD.forEach(function (ele, index, arr) {
 proto.handle = function (req, res, out) {
   let index = 0;
   const stack = this.stack[req.method];
-  const done = out;
 
   function next(err) {
     const layer = stack[index++];
+
     if (!layer) {
       // defer(done, err);
       return;
@@ -152,17 +131,15 @@ proto.listen = function (cfg, callback) {
   let sdk = new Sdk(cfg);
 
   sdk.on('data', this);
-  sdk.init.call(sdk).then(function () {}, function (e) {
+  sdk.init.call(sdk).then(function () {
+    callback && callback(this);
+  }, function (e) {
     console.error('----', e);
     sdk.removeAllListeners();
   });
 };
 
 function compare(req, layer, fn) {
-  const address = req.address;
-  const hubMac = req.hubMac;
-  const property = layer.property;
-
   function routeCompare(str, layerRule) {
     const ruleType = utils.typeof(layerRule);
 
@@ -195,6 +172,10 @@ function compare(req, layer, fn) {
     if (layer.hasOwnProperty(key)) {
       if (key === 'route') {
         if (!routeCompare(req, layer[key], req)) {
+          return fn();
+        }
+      } else if (key === 'address' || key === 'mac') {
+        if (!routeCompare(req[key], layer[key], req)) {
           return fn();
         }
       } else if (key !== 'handle' && key !== 'method') {

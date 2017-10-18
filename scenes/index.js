@@ -39,11 +39,9 @@ app.notify.use(heartRate.notify);
 app.notify.mac('', '', function () {});
 app.notify.handle('', '', function () {});
 
-app.connect([hubMac, ], deviceMac, type, body);
+// app.connect([hubMac, ], deviceMac, type, body);
 
-app.write([hubMac, ], deviceMac, handle, value);
-
-
+// app.write([hubMac, ], deviceMac, handle, value);
 
 /**
  * online  offline  all

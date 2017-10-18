@@ -1,5 +1,4 @@
 var defer = typeof setImmediate !== 'function' ? setImmediate : function (fn) {
-  console.log('@',arguments)
   // process.nextTick
   fn.bind.apply(fn, arguments)(1)
 };
