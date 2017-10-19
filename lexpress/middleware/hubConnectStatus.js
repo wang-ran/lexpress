@@ -1,4 +1,4 @@
 module.exports = function (req, res, next) {
-  console.log('tttttt',this)
+  //console.log('tttttt',this)
   next.call(this);
 }

@@ -109,7 +109,6 @@ class Api extends EventEmitter {
         origin: data.origin,
         mac
       };
-
       this.emit('data', d);
       this.emit('scan', d);
     });
